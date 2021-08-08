@@ -39,7 +39,9 @@ namespace PixLi
 		/// <returns></returns>
 		public abstract int GetNeighbours(Segment segment, Segment[] neighbourSegmentsBuffer);
 
+#if SHAPES_URP || SHAPES_HDRP
 		//TODO: REMOVE!
 		public PathfinderVisualizer PathfinderVisualizer;
+#endif
 	}
 }
