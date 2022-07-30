@@ -1,0 +1,16 @@
+{
+    "name": "com.pixel-lifetime.unity-pixli-polytopial-segments-structure-system",
+    "rootNamespace": "",
+    "references": [
+        "GUID:e4cd6b641a02fa442a29bacdc712b8dd"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -14,7 +14,9 @@ namespace PixLi
 		[SerializeField] protected BoundsInt relativeBounds;
 		public BoundsInt _RelativeBounds => this.relativeBounds;
 
-		public abstract IFieldMemoization _FieldMemoization { get; }
+		//? Contains value if the segment is occupied or free.
+		public abstract IMemoization<bool> _OccupationMemoization { get; }
+		public abstract ISegmentCostMap _SegmentCostMap { get; }
 
 		//public abstract Vector3 GetNodePosition(Vector3 approxPosition);
 
@@ -30,6 +32,22 @@ namespace PixLi
 		/// <param name="segment"></param>
 		/// <returns></returns>
 		public abstract Segment[] GetNeighbours(Segment segment);
+		
+		/// <summary>
+		/// Get neighbour segments in a radius.
+		/// </summary>
+		/// <param name="segment"></param>
+		/// <param name="radius"></param>
+		/// <returns></returns>
+		public abstract Segment[] GetNeighbours(Segment segment, float radius);
+
+		/// <summary>
+		/// Get neighbour segments where distance is calculated in number of steps it takes to reach each segment.
+		/// </summary>
+		/// <param name="segment"></param>
+		/// <param name="maxCost"></param>
+		/// <returns></returns>
+		public abstract Segment[] GetNeighbours(Segment segment, int maxCost);
 
 		/// <summary>
 		/// Get neighbour Segments non alloc.
@@ -39,7 +57,10 @@ namespace PixLi
 		/// <returns></returns>
 		public abstract int GetNeighbours(Segment segment, Segment[] neighbourSegmentsBuffer);
 
-#if SHAPES_URP || SHAPES_HDRP
+		public abstract int GetNeighbours(Segment segment, Segment[] neighbourSegmentsBuffer, float radius);
+		public abstract int GetNeighbours(Segment segment, Segment[] neighbourSegmentsBuffer, int maxCost);
+
+#if (SHAPES_URP || SHAPES_HDRP) && DEBUG_PATHFINDER
 		//TODO: REMOVE!
 		public PathfinderVisualizer PathfinderVisualizer;
 #endif

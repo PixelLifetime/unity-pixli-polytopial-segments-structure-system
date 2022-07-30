@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -10,8 +10,11 @@ namespace PixLi
 		private GridSegment[] _gridSegmentsCache;
 		private GridSegment[,,] _gridSegments;
 
-		private IFieldMemoization _fieldMemoization;
-		public override IFieldMemoization _FieldMemoization => this._fieldMemoization;
+		private IMemoization<bool> _occupationMemoization;
+		public override IMemoization<bool> _OccupationMemoization => this._occupationMemoization;
+
+		[SerializeField] private SegmentCostMap _segmentCostMap;
+		public override ISegmentCostMap _SegmentCostMap => this._segmentCostMap;
 
 		[SerializeField] private Vector3 _cellSize = new Vector3(0.5f, 1.0f, 0.8f);
 		public Vector3 _CellSize => this._cellSize;
@@ -68,7 +71,149 @@ namespace PixLi
 			return segments.ToArray();
 		}
 
+		public override Segment[] GetNeighbours(Segment segment, float radius)
+		{
+			float sqrRadius = radius * radius;
+
+			////TODO: Maybe not create these each function call? HUH?!
+			//Queue<Segment> frontier = new Queue<Segment>(capacity: segment.PolytopialSegmentsStructure._RelativeBounds.size.x * segment.PolytopialSegmentsStructure._RelativeBounds.size.y * segment.PolytopialSegmentsStructure._RelativeBounds.size.z);
+
+			//frontier.Enqueue(item: segment);
+
+			////TODO: Maybe not create these each function call? HUH?!
+			//Dictionary<int, Segment> visitedSegments = new Dictionary<int, Segment>(capacity: segment.PolytopialSegmentsStructure._RelativeBounds.size.x * segment.PolytopialSegmentsStructure._RelativeBounds.size.y * segment.PolytopialSegmentsStructure._RelativeBounds.size.z);
+
+			//while (frontier.Count > 0)
+			//{
+			//	Segment current = frontier.Dequeue();
+
+			//	if (!visitedSegments.ContainsKey(current.Id))
+			//	{
+			//		Segment[] neighbours = current.GetNeighbours();
+
+			//		for (int a = 0; a < neighbours.Length; a++)
+			//		{
+			//			if ((segment.WorldPosition - neighbours[a].WorldPosition).sqrMagnitude <= sqrRadius && !visitedSegments.ContainsKey(neighbours[a].Id))
+			//			{
+			//				frontier.Enqueue(neighbours[a]);
+			//			}
+			//		}
+
+			//		visitedSegments.Add(current.Id, current);
+			//	}
+			//}
+
+			//Segment[] segments = new Segment[visitedSegments.Values.Count];
+
+			//visitedSegments.Values.CopyTo(segments, 0);
+
+			//return segments;
+
+			//? ↑ Approach above is good for a different type of structure. But NOT REALLY? ↑
+			//TODO: Check if you need to do pathfidning for algo below. This is in case a segment that can't be reached is a added. But that is fine, for this type of method I think.
+			//? ↓ For a grid there is a more efficient approach. ↓
+
+			//! Algo: Take radius and calculate min/max indices (x,y,z). Now you have a cube of segments. Iterate that cube and get all of the segments that fit in that radius.
+
+			GridSegment gridSegment = this._gridSegmentsCache[segment.Id];
+
+			int minX = Mathf.Clamp((int)((gridSegment.LocalPosition.x - radius) / this._cellSize.x), 0, this.relativeBounds.size.x - 1);
+			int maxX = Mathf.Clamp((int)((gridSegment.LocalPosition.x + radius) / this._cellSize.x), 0, this.relativeBounds.size.x - 1);
+
+			int	minY = Mathf.Clamp((int)((gridSegment.LocalPosition.y - radius) / this._cellSize.y), 0, this.relativeBounds.size.y - 1);
+			int	maxY = Mathf.Clamp((int)((gridSegment.LocalPosition.y + radius) / this._cellSize.y), 0, this.relativeBounds.size.y - 1);
+
+			int minZ = Mathf.Clamp((int)((gridSegment.LocalPosition.z - radius) / this._cellSize.z), 0, this.relativeBounds.size.z - 1);
+			int maxZ = Mathf.Clamp((int)((gridSegment.LocalPosition.z + radius) / this._cellSize.z), 0, this.relativeBounds.size.z - 1);
+
+			int numberOfSegmentsInCubicRadius = (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
+
+			List<Segment> segments = new List<Segment>(capacity: numberOfSegmentsInCubicRadius);
+
+			for (int x = minX; x <= maxX; x++)
+			{
+				for (int y = minY; y <= maxY; y++)
+				{
+					for (int z = minZ; z <= maxZ; z++)
+					{
+						if ((segment.LocalPosition - this._gridSegments[x, y, z].LocalPosition).sqrMagnitude <= sqrRadius)
+							segments.Add(item: this._gridSegments[x, y, z]);
+					}
+				}
+			}
+
+			return segments.ToArray();
+		}
+
+		//TODO: Add new `GetNeighbours` method that allows to find segments based on radius but `int`. So more like `maxSteps` but steps are a different thing, they are more like how far away unit can reach. But with radius that wouldn't matter.
+		//TODO: Plans changed, this method is already the one with `maxSteps`. Make another one but with a new parameter and that method will take into account `Memoization`. So `GetNeighbours(Segment segment, int maxSteps, IMemoization memoization)`.
+		//TODO: But even with memoization that is not all the same as with pathfinding. You aren't increasing number of steps taken to reach that segment. Memoization is rather - select segments but only those I can actually walk on.
+		//TODO: What you also need is a method with that increase of steps taken to reach some segment which would make it actually `maxSteps` and the method discussed above - we actually need an `int radius` for that.
+		//? `maxSteps` renamed to `maxCost`.
+		
+		public override Segment[] GetNeighbours(Segment segment, int maxCost)
+		{
+			int capacity = segment.PolytopialSegmentsStructure._RelativeBounds.size.x * segment.PolytopialSegmentsStructure._RelativeBounds.size.y * segment.PolytopialSegmentsStructure._RelativeBounds.size.z;
+
+			//TODO: Maybe not create these each function call? HUH?!
+			Queue<Segment> frontier = new Queue<Segment>(capacity: capacity);
+
+			frontier.Enqueue(item: segment);
+
+			//TODO: Maybe not create these each function call? HUH?!
+			Dictionary<int, float> cost = new Dictionary<int, float>(capacity: capacity)
+			{
+				[segment.Id] = 0.0f
+			};
+
+			while (frontier.Count > 0)
+			{
+				Segment current = frontier.Dequeue();
+
+				Segment[] neighbours = current.GetNeighbours();
+
+				for (int a = 0; a < neighbours.Length; a++)
+				{
+					Segment next = neighbours[a];
+
+					float newCost = cost[current.Id] + this._segmentCostMap.GetCost(next); //+ 1; // + this.Distance(current, neighbours[a]) // + 1 was to replace distance
+
+					if (newCost <= maxCost && (!cost.ContainsKey(next.Id) || newCost < cost[next.Id]))
+					{
+						cost[next.Id] = newCost;
+
+						frontier.Enqueue(next);
+					}
+				}
+			}
+
+			Segment[] segments = new Segment[cost.Keys.Count - 1];
+
+			int i = 0;
+			foreach (int segmentId in cost.Keys)
+			{
+				if (this._gridSegmentsCache[segmentId] != segment)
+				{
+					segments[i] = this._gridSegmentsCache[segmentId];
+
+					++i;
+				}
+			}
+
+			return segments;
+		}
+
 		public override int GetNeighbours(Segment segment, Segment[] neighbourSegmentsBuffer)
+		{
+			throw new System.NotImplementedException();
+		}
+
+		public override int GetNeighbours(Segment segment, Segment[] neighbourSegmentsBuffer, float radius)
+		{
+			throw new System.NotImplementedException();
+		}
+
+		public override int GetNeighbours(Segment segment, Segment[] neighbourSegmentsBuffer, int maxCost)
 		{
 			throw new System.NotImplementedException();
 		}
@@ -76,7 +221,7 @@ namespace PixLi
 		[SerializeField] private FieldGraphicModule _fieldGraphicModule;
 		public FieldGraphicModule _FieldGraphicModule => this._fieldGraphicModule;
 
-		private void Awake()
+		private void Initialize()
 		{
 			this._gridSegments = new GridSegment[this.relativeBounds.size.x, this.relativeBounds.size.y, this.relativeBounds.size.z];
 			this._gridSegmentsCache = new GridSegment[this.relativeBounds.size.x * this.relativeBounds.size.y * this.relativeBounds.size.z];
@@ -110,11 +255,19 @@ namespace PixLi
 					}
 				}
 			}
+		}
+
+		private void Awake()
+		{
+			this.Initialize();
 
 			//TODO: This will not work in Editor. But you need to make it work some other way, because constructing during editor time should also be an option.
-			this._fieldMemoization = new GridFieldMemoization(this);
+			this._occupationMemoization = new Memoization<bool>(polytopialSegmentsStructure: this);
+			//this._segmentCostMap = new SegmentCostMap(polytopialSegmentsStructure: this);
 
-			this._fieldGraphicModule.Initialize(this);
+			this._segmentCostMap.Initialize(polytopialSegmentsStructure: this);
+
+			//this._fieldGraphicModule.Initialize(this);
 		}
 
 #if UNITY_EDITOR
